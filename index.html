@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html ng-app="vp">
+<head>
+    <title>Flexible layout</title>
+    <link rel="stylesheet" type="text/css" href="bootstrap/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="http://fonts.googleapis.com/css?family=Open+Sans%3A400italic%2C600italic%2C700italic%2C400%2C300%2C600%2C700&amp;subset=latin%2Ccyrillic-ext%2Ccyrillic%2Cgreek-ext%2Cgreek%2Cvietnamese%2Clatin-ext&amp;ver=1" type="text/css" media="all">
+    <style type="text/css">
+    html, body {
+        width:100%;
+        height:100%;
+        padding:0px;
+        margin:0px;
+        background-color:white;
+    }
+    #fixed-width { 
+        width:200px;
+        background-color:lightyellow;
+    }
+  </style>
+</head>
+<body ng-controller="main">
+
+
+<area name="name"></area>
+
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/2.1.0/jquery.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.2.15/angular.min.js"></script>
+    <script src="https://code.angularjs.org/1.2.15/angular-route.min.js"></script>
+    <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/d3/3.4.10/d3.min.js"></script>
+    <script type="text/javascript" src="bootstrap/js/bootstrap.min.js"></script>
+    <script type="text/javascript" src="http://isotope.metafizzy.co/isotope.pkgd.min.js"></script>
+    <script type="text/javascript">
+
+     var app = angular.module("vp", []);
+var funds;
+        app.service('portfoliofilter', function(){
+          this.funds = [];
+          this.currentPeriod = "";
+          this.idxByPeriod = {};
+          this.idxByFund = {};
+          this.idxById = {};
+          this.fundsPool = [];
+          this.filterStack = {};
+
+          function AND(a1, a2){}
+          function OR(o1, o2){}
+          this.addFilter = function(metric, min, max){
+            this.filterStack[metric] = {
+              metric: metric,
+              min: !isNaN(min)? min:-Number.MAX_VALUE,
+              max: !isNaN(max)? max:Number.MAX_VALUE
+            }
+          }
+          this.rmFilter = function(metric, min, max){
+            if(this.filterStack[metric]){
+              delete this.filterStack[metric];
+            }
+          }
+          this.filterFunds = function(){
+            var fidxs = this.idxByPeriod[this.currentPeriod];
+            var fstk =  this.filterStack;
+            var fs = this.funds;
+            for(var m in fstk){
+              fidxs.forEach(function(fidx, i){
+                if( fs[fidx][fstk[m]["metric"]]<fstk[m]["min"] || fs[fidx][fstk[m]["metric"]]>fstk[m]["max"] ){
+                  fidxs.splice(i,1);
+                }
+              });
+            }
+            return fidxs;
+          }
+          this.sortFund = function(funds, metric){
+            funds.sort(function(a, b){
+              return d3.ascending( a[metric], b[metric] );
+            });
+          }
+          this.setCurrentPeriod = function(period){
+            this.currentPeriod = period;
+          }
+          this.parsePortfolio = function(funds){
+            this.funds = funds;
+            for(var i in funds){
+              var f = funds[i];
+              if(this.idxByPeriod[f["Period"]]){
+                this.idxByPeriod[f["Period"]].push(i);
+              }else {
+                this.idxByPeriod[f["Period"]] = [i];
+              }
+              if(this.idxByFund[f["Fund Name"]]){
+                this.idxByFund[f["Fund Name"]].push(i);
+              }else {
+                this.idxByFund[f["Fund Name"]] = [i];
+              }
+              if(this.idxById[f["id"]]){
+                this.idxById[f["id"]].push(i);
+              }else {
+                this.idxById[f["id"]] = [i];
+              }
+            };
+          }
+        });
+
+
+
+app.directive("area", function($compile){
+
+  return {
+    restrict:"E",
+    scope: {
+      name: "="
+    },
+    controller: function($scope){
+    },
+    compile: function(tEL, tAttrs){
+
+
+
+      return {
+        post: function(scope, el, attrs){
+          var a = d3.select(el[0]);
+          el.append($compile("<pt></pt>")(scope));
+        }
+      }// end of return compile
+
+    }
+  }// end of return directive
+
+});
+app.directive("pt", function($compile){
+
+  return {
+    restrict:"E",
+    replace: true,
+    controller: function($scope){},
+    compile: function(tEL, tAttrs){
+
+      return {
+        post: function(scope, el, attrs){
+          var a = d3.select(el[0]);
+          var btn = a.append("button").attr("title", "name")
+            .text("{{name}}");
+
+            $compile(btn.node())(scope)
+
+        }
+      }// end of return compile
+
+    }
+  }// end of return directive
+
+});
+
+
+
+app.directive("fundsFilter", ["$compile", "portfoliofilter", function($compile, portfoliofilter){
+
+  return {
+    restrict:"E",
+    scope: {
+      appFunds: "=",
+      period: "=",
+      appData: "="
+    },
+    controller: function($scope){
+      $scope.currentFunds = appFunds.slice(0);
+      $scope.metricList = [];
+      $scope.valueFieldList = [];
+
+    },
+    compile: function(tEL, tAttrs){
+
+      return {
+        post: function(scope, el, attrs){
+
+
+          scope.$watch("currentFunds", function(newfunds, oldfunds){
+
+          });
+          scope.$watch("appFunds", function(newfunds, oldfunds){
+
+          });
+          scope.$watch("period", function(newfunds, oldfunds){
+
+          });
+
+        }
+      }// end of compile return
+    }// end of compile
+
+  }// end of directive return
+
+}]);
+
+
+
+
+        app.controller("main", ["$scope", "$http", "portfoliofilter", "$compile", function($scope, $http, portfoliofilter, $compile){
+          
+          $scope.funds = [];
+          $scope.name = "this is main controller name;"
+          $http.get("data/core.json")
+                .success(function(data){
+                  $scope.funds = data;
+                  funds = data;
+                  portfoliofilter.parsePortfolio($scope.funds);
+                  console.log("idxByPeriod:", portfoliofilter.idxByPeriod);
+                  portfoliofilter.setCurrentPeriod("8/1/2013");
+                  portfoliofilter.addFilter("Allocation", 0, 1)
+                  var fs = portfoliofilter.filterFunds();
+
+                })
+                .error(function(err){
+                  console.log(err);
+                });
+          $scope.$watch("funds", function(){
+
+          });
+
+        }]);
+
+
+
+
+
+
+
+// ignore this function
+function randata(n){ 
+    var data =[]; 
+    for(var i=0; i<n; i++){
+        data.push({
+            id:i, 
+            value: 100* Math.random()-50
+        }); 
+    }  
+    return data;
+}
+
+
+
+function filterSlider(){
+
+    function filter(scope, compile){
+
+
+      var svg,filterG;
+
+
+
+      var fltrSize = {
+        left: 100,
+        top: 50,
+        width:400,
+        height:100,
+        barW: 10,
+        barH: 120,
+        lblW: 50,
+        lblH: 10,
+      };
+
+
+      var scaleX = d3.scale.linear().range([0,400]).domain([-1, 1]);
+      var drag = d3.behavior.drag()  
+                   .on('dragstart', function() {
+                      d3.select(this).__pos = {
+                        x: d3.select(this).attr("x"),
+                        y: d3.select(this).attr("y")
+                      }
+                   })
+                   .on('drag', function() {
+                      var x = d3.event.x;
+                      var y = d3.event.y;
+                      var self = d3.select(this);
+                      var bar = self.classed("lbar");
+                      if(bar){
+                        if(x<=0){
+                          x = 0;
+                        }else if(x>=extent.max){
+                          x = extent.max;
+                        }
+                        extent.min = x;
+                        d3.select(this.parentNode)
+                          .select(".leftlblG")
+                          .attr("transform", function(){
+                            return "translate("+(x-0.5*fltrSize.lblW)+","+10+")";
+                          })
+                          .select("text")
+                          .text(function(){
+                            return d3.round(scaleX.invert(extent.min), 2);
+                          })
+                      }else {
+                        if(x<=extent.min){
+                          x = extent.min;
+                        }else if(x>=400){
+                          x = 400;
+                        }
+                        extent.max = x;
+                        d3.select(this.parentNode)
+                          .select(".rightlblG")
+                          .attr("transform", function(){
+                            return "translate("+(x-0.5*fltrSize.lblW)+","+10+")";
+                          })
+                          .select("text")
+                          .text(function(){
+                            return d3.round(scaleX.invert(extent.max), 2);
+                          })
+                      }
+                      d3.select(this).__pos = {
+                        x: x,
+                        y: y
+                      }
+                      d3.select(this)
+                        .attr("x", function(){
+                          return x;
+                        });
+                      
+                      filterG.select(".rangeArea")
+                             .attr("x", function(){
+                              return extent.min+5;
+                             })
+                             .attr("width", function(){
+                              return extent.max - extent.min;
+                             });
+
+                    })
+                   .on('dragend', function() {
+                    console.log("Right now the filter values is:"+extent.min+":"+extent.max);
+                   });
+
+      svg = d3.select("body")
+        .append("svg")
+        .attr("width", function(){
+          return 500;
+        })
+        .attr("height", function(){
+          return 200;
+        });
+
+      filterG = svg.append("g")
+                       .classed("filterG", true)
+                       .attr("transform", function(){
+                        return "translate(50,0)";
+                       });
+
+      filterG.append("rect")
+         .classed("slidearea", true)
+         .attr("width", function(){
+          return 400;
+         })
+         .attr("height", function(){
+          return 100;
+         })
+         .attr("transform", function(){
+          return "translate(0, 50)";
+         })
+         .style("fill", function(){
+          return "WhiteSmoke";
+         })
+
+      var extent = {
+        min:0,
+        max:400
+      };
+
+      var rangeArea = filterG.append("rect")
+                             .classed("rangeArea", true)
+                             .attr("width", function(){
+                              return extent.max-extent.min;
+                             })
+                             .attr("height", function(){
+                              return fltrSize.height;
+                             })
+                             .attr("x", function(){
+                              return extent.min+5;
+                             })
+                             .attr("y", function(){
+                              return 50;
+                             })
+                             .style("fill", function(){
+                              return "rgba(10,10,10,0.2)";
+                             });
+
+
+      var lblG = filterG.append("g")
+                           .attr("transform", function(){
+                            return "translate("+extent.min+","+10+")";
+                           })
+      var minLabel = lblG.append("rect")
+                              .classed("minLabel", true)
+                              .attr("width", function(){
+                                return 50;
+                              })
+                              .attr("height", function(){
+                                return 20;
+                              })
+                              .attr("x", function(){
+                                return 0-0.5*fltrSize.lblW;
+                              })
+                              .attr("y", function(){
+                                return 0;
+                              })
+                             .attr("rx", function(){
+                              return 5;
+                             })
+                             .attr("ry", function(){
+                              return 5;
+                             })
+                             .style("fill", "WhiteSmoke");
+      lblG.append("text")
+              .text(function(){
+                return scaleX.invert(0);
+              })
+              .attr("x", function(){
+                return 0;
+              })
+              .attr("y", function(){
+                return 15;
+              });
+      var maxLabel = lblG.append("rect")
+                              .classed("maxLabel", true)
+                              .attr("width", function(){
+                                return 50;
+                              })
+                              .attr("height", function(){
+                                return 20;
+                              })
+                              .attr("x", function(){
+                                return fltrSize.width-0.5*fltrSize.lblW;;
+                              })
+                              .attr("y", function(){
+                                return 0;
+                              })
+                             .attr("rx", function(){
+                              return 5;
+                             })
+                             .attr("ry", function(){
+                              return 5;
+                             })
+                              .style("fill", "WhiteSmoke");
+      lblG.append("text")
+              .text(function(){
+                return scaleX.invert(400);
+              })
+              .attr("x", function(){
+                return 400;
+              })
+              .attr("y", function(){
+                return 15;
+              });
+
+      var leftBarG = filterG.append("g")
+                            .classed("leftBarG", true);
+      var leftBar = leftBarG.append("rect")
+                            .classed("lbar", true)
+                             .attr("width", function(){
+                              return 10;
+                             })
+                             .attr("height", function(){
+                              return 120;
+                             })
+                             .attr("x", function(){
+                              return extent.min;
+                             })
+                             .attr("y", function(){
+                              return 40;
+                             })
+                             .attr("rx", function(){
+                              return 4;
+                             })
+                             .attr("ry", function(){
+                              return 4;
+                             })
+                             .style("stroke-width", function(){
+                              return 2;
+                             })
+                             .style("stroke", function(){
+                              return "grey";
+                             })
+                             .style("fill", function(){
+                              return "rgba(150,150,150,0.8)";
+                             });
+      leftBar.call(drag);
+
+      var leftlblG = leftBarG.append("g")
+                             .classed("leftlblG", true)
+                             .attr("transform", function(){
+                              return "translate("+(extent.min-0.5*fltrSize.lblW)+","+10+")";
+                             })
+      var leftLabel = leftlblG.append("rect")
+                              .classed("leftLabel", true)
+                              .attr("width", function(){
+                                return 50;
+                              })
+                              .attr("height", function(){
+                                return 20;
+                              })
+                              .attr("x", function(){
+                                return 0;
+                              })
+                              .attr("y", function(){
+                                return 0;
+                              })
+                             .attr("rx", function(){
+                              return 5;
+                             })
+                             .attr("ry", function(){
+                              return 5;
+                             })
+                              .style("fill", "silver");
+      leftlblG.append("text")
+              .text(function(){
+                return scaleX.invert(extent.min);
+              })
+              .attr("x", function(){
+                return 0;
+              })
+              .attr("y", function(){
+                return 15;
+              })
+              .style("fill", "WhiteSmoke");
+
+      var rightBarG = filterG.append("g")
+                            .classed("rightBarG", true);
+
+      var rightBar = rightBarG.append("rect")
+                            .classed("rbar", true)
+                             .attr("width", function(){
+                              return 10;
+                             })
+                             .attr("height", function(){
+                              return 120;
+                             })
+                             .attr("x", function(){
+                              return extent.max;
+                             })
+                             .attr("y", function(){
+                              return 40;
+                             })
+                             .attr("rx", function(){
+                              return 4;
+                             })
+                             .attr("ry", function(){
+                              return 4;
+                             })
+                             .style("stroke-width", function(){
+                              return 2;
+                             })
+                             .style("stroke", function(){
+                              return "grey";
+                             })
+                             .style("fill", function(){
+                              return "rgba(150,150,150,0.8)";
+                             });
+      rightBar.call(drag);
+
+      var rightlblG = rightBarG.append("g")
+                             .classed("rightlblG", true)
+                             .attr("transform", function(){
+                              return "translate("+(extent.max-0.5*fltrSize.lblW)+","+10+")";
+                             })
+      var rightLabel = rightlblG.append("rect")
+                              .classed("rightLabel", true)
+                              .attr("width", function(){
+                                return 50;
+                              })
+                              .attr("height", function(){
+                                return 20;
+                              })
+                              .attr("x", function(){
+                                return 0;
+                              })
+                              .attr("y", function(){
+                                return 0;
+                              })
+                             .attr("rx", function(){
+                              return 5;
+                             })
+                             .attr("ry", function(){
+                              return 5;
+                             })
+                              .style("fill", "silver");
+      rightlblG.append("text")
+              .text(function(){
+                return scaleX.invert(extent.max);
+              })
+              .attr("x", function(){
+                return 0;
+              })
+              .attr("y", function(){
+                return 15;
+              })
+              .style("fill", "WhiteSmoke");
+
+    }
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+// (function(){
+
+//     var app = angular.module("vp", []);
+//     app.controller("main", function($scope){
+//         console.log("scope from main: ", $scope);
+//         $scope.name="init name";
+//     })
+
+//     app.directive("dirtest", function($compile){
+//         return {
+//             restrict: "E",
+//             scope: false,
+//             controller : function($scope){
+//             },
+//             compile: function(tEl, tAttrs){
+//                 return {
+//                     post: function(scope, el, attrs, ctrl){
+//                         el.append($compile("<button class='dirbtn'>{{name}}</button>")(scope));
+//                         // el.append("<button class='dirbtn'>{{name}}</button>");
+
+//                         $("button.dirbtn").on("click", function(){
+//                             scope.name = Math.random();
+//                             console.log(scope.name);
+//                             scope.$apply();
+//                         });
+//                     }
+//                 };
+//             }
+//         }
+//     });
+
+// })();
+
+
+
+// (function(){
+//     var app = angular.module("vp", []);
+//     app.controller("main", ['$scope','$window', function($scope, $window){
+//     }]);
+
+//     app.directive("numinput", function($compile){
+//         return {
+//             restrict: "E",
+//             compile: function(el, attrs){
+//                 console.log("get compiled");
+//             // the key to add directive inside directive is to call $compile service to generate the DOM
+//             // and return it as object which include pre-link or post-link function for next stage call(I guess the link is same as this).
+//                 return {
+//                     post: function(scope, element, attrs){
+//                         console.log("get linked");
+//                         element.append("<input type='number'/>");
+//                     }                    
+//                 };
+//             }
+//         };
+
+//     });
+//     app.directive("inputarea", function($compile){
+//         return {
+//             restrict: "E",
+//             link: function(scope, element, attrs){
+
+//                 element.append("<button id='addtxt'>Add directive inside this directive</button><br>");
+                
+//                 // this function just like our chartEl.datum(scope.funds).call(vis.rendering);
+//                 function chart(scope, el, $cpl){
+//                     var chart1 = $cpl("<numinput></numinput><br>")(scope);
+//                     var chart2 = $cpl("<numinput></numinput><br>")(scope);
+//                     el.append(chart1);
+//                     el.append(chart2);
+//                 }
+
+//                 $("#addtxt").on("click", function(){
+//                     chart(scope, element, $compile);
+//                 });
+
+
+
+
+//             }
+//         };
+
+//     });
+
+
+// })();
+
+// d3.select("body") 
+//     .select("inputarea")
+//     .selectAll("div")
+//     .data([1,2,3,4])
+//     .enter().append("input")
+//     .attr("type","number")
+//     .attr("value", function(d,i){
+//         return d;
+//     })
+//     .attr( "max",'1' );
+
+
+/*.each("end", function(){
+    d3.select(this).style("display","none");
+});*/
+
+//     var width = 960,
+//     height = 500;
+
+//     var color = d3.scale.category20();
+
+//     var force = d3.layout.force()
+//     .charge(-20)
+//     .linkDistance(30)
+//     .size([width, height]);
+
+// console.log(force);
+
+//     var svg = d3.select("body").append("svg")
+//     .attr("width", width)
+//     .attr("height", height);
+
+//     d3.json("miserables.json", function(error, graph) {
+//       force
+//       .nodes(graph.nodes)
+//       .links(graph.links)
+//       .start();
+
+//       var link = svg.selectAll(".link")
+//       .data(graph.links)
+//       .enter().append("line")
+//       .attr("class", "link")
+//       .style("stroke-width", function(d) { return Math.sqrt(d.value); });
+
+//       var node = svg.selectAll(".node")
+//       .data(graph.nodes)
+//       .enter().append("circle")
+//       .attr("class", "node")
+//       .attr("r", 5)
+//       .style("fill", function(d) { return color(d.group); })
+//       .call(force.drag);
+
+//       node.append("title")
+//       .text(function(d) { return d.name; });
+
+//       force.on("tick", function() {
+//         link.attr("x1", function(d) { return d.source.x; })
+//         .attr("y1", function(d) { return d.source.y; })
+//         .attr("x2", function(d) { return d.target.x; })
+//         .attr("y2", function(d) { return d.target.y; });
+
+//         node.attr("cx", function(d) { return d.x; })
+//         .attr("cy", function(d) { return d.y; });
+//     });
+//   });
+</script>
+
+
+<script type="text/javascript">
+
+
+
+
+
+// var margin = {top: 200, right: 40, bottom: 200, left: 40},
+//     width = 960 - margin.left - margin.right,
+//     height = 500 - margin.top - margin.bottom;
+
+// var x = d3.time.scale()
+//     .domain([new Date(2013, 7, 1), new Date(2013, 7, 15) - 1])
+//     .range([0, width]);
+
+// var brush = d3.svg.brush()
+//     .x(x)
+//     .extent([new Date(2013, 7, 2), new Date(2013, 7, 3)])
+//     .on("brushend", brushended);
+
+// var svg = d3.select("body").append("svg")
+//     .attr("width", width + margin.left + margin.right)
+//     .attr("height", height + margin.top + margin.bottom)
+//   .append("g")
+//     .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+// svg.append("rect")
+//     .attr("class", "grid-background")
+//     .attr("width", width)
+//     .attr("height", height);
+
+// svg.append("g")
+//     .attr("class", "x grid")
+//     .attr("transform", "translate(0," + height + ")")
+//     .call(d3.svg.axis()
+//         .scale(x)
+//         .orient("bottom")
+//         .ticks(d3.time.hours, 12)
+//         .tickSize(-height)
+//         .tickFormat(""))
+//   .selectAll(".tick")
+//     .classed("minor", function(d) { return d.getHours(); });
+
+// svg.append("g")
+//     .attr("class", "x axis")
+//     .attr("transform", "translate(0," + height + ")")
+//     .call(d3.svg.axis()
+//       .scale(x)
+//       .orient("bottom")
+//       .ticks(d3.time.days)
+//       .tickPadding(0))
+//   .selectAll("text")
+//     .attr("x", 6)
+//     .style("text-anchor", null);
+
+// var gBrush = svg.append("g")
+//     .attr("class", "brush")
+//     .call(brush)
+//     .call(brush.event);
+
+// gBrush.selectAll("rect")
+//     .attr("height", height);
+
+// function brushended() {
+//   if (!d3.event.sourceEvent) return;  //only transition after input
+//   var extent0 = brush.extent(),
+//       extent1 = extent0.map(d3.time.day.round);
+
+//    // if empty when rounded, use floor & ceil instead
+//   if (extent1[0] >= extent1[1]) {
+//     extent1[0] = d3.time.day.floor(extent0[0]);
+//     extent1[1] = d3.time.day.ceil(extent0[1]);
+//   }
+
+//   d3.select(this).transition()
+//       .call(brush.extent(extent1))
+//       .call(brush.event);
+// }
+
+</script>
+<script type="text/javascript">
+ // function transMgr(){
+ //     var counter = 0;
+ //     var runout = true;
+ //     var ELs;
+ //     function manager(selections){
+ //       var len;
+ //       ELs = selections;
+ //       len = ELs.size();
+ //       manager.counter(len);
+ //       return manager;
+ //     }
+ //     manager.counter = function(n){
+ //         if(arguments.length==0){
+ //             return counter;
+ //         }
+ //         console.log(this);
+ //         counter = n;
+ //         if(n>0){
+ //             runout = false;
+ //         }
+ //         return manager;
+ //     }
+ //     manager.tick = function(){
+ //         counter--;
+ //         if(counter < =0){
+ //            runout = true; 
+ //            alert("Transition ends!");
+ //         }
+ //         return manager;
+ //     }
+ //     return manager;
+ // }
+
+ // var manager = transMgr();
+
+ // d3.select("button").on("click", function(){
+ // var color = d3.scale.category20();
+ //  d3.selectAll("div").remove();
+ //   d3.selectAll("div")
+ //     .data([1,2,3,4,5])
+ //     .enter()
+ //     .append("div")
+ //     .style("display", "inline-block")
+ //     .call(manager)
+ //     .style("width", function(d,i){
+ //       return 0+"px";
+ //     })
+ //     .style("height", function(d,i){
+ //       return 0+"px";
+ //     })
+ //     .transition()
+ //     .duration(1000)
+ //     .delay(function(d,i){
+ //       console.log(d,i);
+ //       return i*1000;
+ //     })
+ //     .style("width", function(d,i){
+ //       return 100+"px";
+ //     })
+ //     .style("height", function(d,i){
+ //       return 100+"px";
+ //     })
+ //     .style("background-color", function(d, i){
+ //       return color(i);
+ //     })
+ //     .each("end", function(d,i){
+ //        console.log(manager.counter());
+ //       manager.tick();
+ //     });
+
+ // })
+
+
+ // console.log(a);
+
+ // var line = d3.
+
+ // var svg = d3.select("body")
+ //   .append("svg")
+ //   .attr("width", 300)
+ //   .attr("height", 200);
+
+ // var path = svg.append("g")
+ //    .classed("button", true)
+ //    .append("path")
+ //    .attr("d", function(){
+ //    	return "M 20 180 L 280 180 L280 20 L 20 20 L 20 20 Z";
+ //    });
+
+
+ // path.attr("stroke-dasharray", function(){
+ // 	var l = path.node().getTotalLength();
+ // 	return l+" "+l;
+ //    })
+ //    .attr("stroke-dashoffset",function(){
+ //    	var l = path.node().getTotalLength();
+ // 	return l;
+ //    })
+ //    .style("stroke", "red")
+ //    .style("stroke-width", 5)
+ //    .style("fill", "none")
+ //    .transition()
+ //    .duration(4000)
+ //    .attr("stroke-dashoffset", function(){
+ // 	return 0;
+ //    });
+
+ // $(".divider").css('cursor', "move");
+ // $(".divider").on("mousedown", function(e){
+
+ //     var $drag = $(this);
+ //     var l, t;
+ //     var z_idx = $drag.css('z-index'),
+ //         drg_h = $drag.outerHeight(),
+ //         drg_w = $drag.outerWidth(),
+ //         pos_y = $drag.offset().top + drg_h - e.pageY,
+ //         pos_x = $drag.offset().left + drg_w - e.pageX;
+ // var w = $drag.parents().width();
+ // var h = $drag.parents().height();
+ // console.log(w, h);
+
+ //     $drag.parents().on("mousemove", function(e){
+
+ //         var t = e.pageY + pos_y - drg_h;
+ //         var l = e.pageX + pos_x - drg_w;
+
+ //  if(l>$drag.parents().)
+
+ //         if($drag.attr("dir")=="v"){
+ //             t = $drag.offset().top;
+ //         }else if($drag.attr("dir")=="h"){
+ //             l = $drag.offset().left;
+ //         }
+ //         $drag.offset({
+ //             top: t,
+ //             left:l
+ //         });
+
+
+ //         e.preventDefault();
+ //     });
+ //     $drag.parents().on("mouseup", function(e){
+ //         $drag.parents().off("mousemove");
+ //     });
+
+ // });
+
+
+
+ // $("body").css("margin", "0px")
+ //                .css("padding", "0px")
+ //                .css("height","100%")
+ //                .css("width","100%");
+
+ </script>
+
+</body>
+</html>
